@@ -1,8 +1,8 @@
-name: Generate RULE-SET for Premium Edition of Clash
+name: Generate TORRENT RULE-SET of Clash
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 23 * * *"
+    - cron: "0 5 * * *"
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,22 +14,27 @@ jobs:
           echo "COMMIT_DATE=$(date "+%Y-%m-%d %H:%M")" >> $GITHUB_ENV
           echo "trackers_anime=https://raw.githubusercontent.com/DeSireFire/animeTrackerList/master/AT_all.txt" >> $GITHUB_ENV
           echo "trackers_all=https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/all.txt" >> $GITHUB_ENV
+          echo "trackers_all_alt1=https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_all.txt" >> $GITHUB_ENV
       
       - name: Checkout the "hidden" branch
         uses: actions/checkout@v3
       
-      - name: Generate trackers.txt file (Clash RULE-SET format)
+      - name: Generate trackers.yaml file (Clash RULE-SET format)
         run: |
-          echo "payload:" > anime_trackers.txt
-          curl -sSL ${trackers_anime} | while read line; do
+          echo "payload:" > torrents+anime.yaml
+          (
+            curl -sSL "${trackers_anime}"
+            curl -sSL "${trackers_all}"
+            curl -sSL "${trackers_all_alt1}"
+          ) | grep -v '^$' | sed "s/^ *//;s/ *$//" | sort -u | awk '!seen[$0]++' | while read line; do
             target=$(echo "$line" | sed "s/^.*:\/\///;s/\/.*$//")
             if [[ "$target" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "  - IP-CIDR,${target}/32" >> anime_trackers.txt
+              echo "  - IP-CIDR,${target}/32" >> torrents+anime.yaml
             elif [[ "$target" =~ ^AS[0-9]+$ ]]; then
               num=$(echo "$target" | sed 's/AS//')
-              echo "  - IP-ASN,${num}" >> anime_trackers.txt
+              echo "  - IP-ASN,${num}" >> torrents+anime.yaml
             elif [[ "$target" =~ ^[a-zA-Z0-9.-]+$ ]]; then
-              echo "  - DOMAIN-SUFFIX,${target}" >> anime_trackers.txt
+              echo "  - DOMAIN-SUFFIX,${target}" >> torrents+anime.yaml
             fi
           done
       
@@ -43,6 +48,6 @@ jobs:
 
       - name: Purge jsdelivr CDN
         run: |
-          for file in $(ls *.txt); do
+          for file in $(ls *.yaml); do
             curl -i "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/${file}"
           done
