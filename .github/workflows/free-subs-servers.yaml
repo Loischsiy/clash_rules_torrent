@@ -40,8 +40,9 @@ jobs:
           echo "---- source head (first 40 lines) ----"
           head -n 40 subconverter/source.txt || true
 
-          # Простая детекция формата: если есть vmess/vless/trojan — считаем V2Ray-подпиской
-          if grep -qE 'vmess://|vless://|trojan://' subconverter/source.txt; then
+          # Расширённая детекция формата: ищем vmess/vless/trojan/ss или JSON-поля v2ray
+          if grep -qE 'vmess://|vless://|trojan://|ss://' subconverter/source.txt || \
+             grep -qE '"add"|"ps"|"port"|"protocol"' subconverter/source.txt; then
             TARGET="v2ray"
           else
             TARGET="clash"
@@ -57,8 +58,12 @@ jobs:
             sleep 1
           done
 
-          # Запрос к локальному subconverter, результат сохраняем в папку `subconverter` чтобы совпадало с коммитом
-          curl -sS -o subconverter/clash.yaml "http://127.0.0.1:25500/sub?target=$TARGET&url=$ENCODED_URLS&insert=false&config=https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini" || true
+          # Запрос к локальному subconverter, сохраняем и тело ответа для диагностики
+          curl -sS -o subconverter/response.txt "http://127.0.0.1:25500/sub?target=$TARGET&url=$ENCODED_URLS&insert=false&config=https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Full.ini" || true
+          # Если subconverter вернул что-то осмысленное, переместим в итоговый файл
+          if [ -s subconverter/response.txt ]; then
+            mv subconverter/response.txt subconverter/clash.yaml
+          fi
 
           # Диагностика на случай ошибки
           if [ ! -s subconverter/clash.yaml ]; then
@@ -67,6 +72,8 @@ jobs:
             tail -n 200 subconverter/subconverter.log || true
             echo "==== source sample (head) ===="
             head -n 200 subconverter/source.txt || true
+            echo "==== subconverter response (head) ===="
+            head -n 200 subconverter/response.txt || true
             exit 1
           fi
 
@@ -76,4 +83,3 @@ jobs:
           commit_message: "Auto-update subscription config [skip ci]"
           file_pattern: 'subconverter/clash.yaml' # Какой файл коммитить
           push_options: '--force' # Опционально, если нужно перезаписывать
-
