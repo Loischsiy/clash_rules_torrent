@@ -40,8 +40,10 @@ jobs:
           echo "---- source head (first 40 lines) ----"
           head -n 40 subconverter/source.txt || true
 
-          # Расширённая детекция формата: ищем vmess/vless/trojan/ss или JSON-поля v2ray
-          if grep -qE 'vmess://|vless://|trojan://|ss://' subconverter/source.txt || \
+          # Расширённая детекция формата:
+          # - vmess/vless/trojan => v2ray
+          # - ss/ssr или отсутствующие JSON-поля => clash
+          if grep -qE 'vmess://|vless://|trojan://' subconverter/source.txt || \
              grep -qE '"add"|"ps"|"port"|"protocol"' subconverter/source.txt; then
             TARGET="v2ray"
           else
@@ -63,6 +65,21 @@ jobs:
           # Если subconverter вернул что-то осмысленное, переместим в итоговый файл
           if [ -s subconverter/response.txt ]; then
             mv subconverter/response.txt subconverter/clash.yaml
+          fi
+
+          # Покажем небольшую превью сгенерированного файла для отладки
+          if [ -s subconverter/clash.yaml ]; then
+            echo "==== generated config (head) ===="
+            head -n 40 subconverter/clash.yaml || true
+            # Если subconverter вернул сообщение об отсутствии нод, считаем это ошибкой
+            if grep -q "No nodes were found" subconverter/clash.yaml; then
+              echo "Subconverter reports no nodes; failing for debug output"
+              echo "==== subconverter log (tail) ===="
+              tail -n 200 subconverter/subconverter.log || true
+              echo "==== source sample (head) ===="
+              head -n 200 subconverter/source.txt || true
+              exit 1
+            fi
           fi
 
           # Диагностика на случай ошибки
